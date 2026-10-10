@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand-rose: #BE185D;
+    --brand-hover: #9D174D;
+    --brand-ticker: #FCE7F3;
+    --brand-soft: #FFF7FA;
+    --surface: #FFFFFF;
+    --slate-main: #1F2937;
+    --slate-muted: #64748B;
+    --slate-border: #E5E7EB;
+    --status-success: #15803D;
+    --status-warning: #B45309;
+    --status-critical: #B91C1C;
+    --status-info: #0369A1;
+  }
+
+  body {
+    color: var(--slate-main);
+    background-color: #F8FAFC;
+    font-family: 'Noto Sans Tamil', 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Ticker marquee animation */
+@keyframes ticker {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-ticker {
+  animation: ticker 40s linear infinite;
+  display: flex;
+  width: max-content;
+}
+
+.animate-ticker.paused {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-ticker {
+    animation: none;
+    transform: none;
+  }
+}

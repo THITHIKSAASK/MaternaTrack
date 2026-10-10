@@ -1,0 +1,429 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String       @id @default(uuid())
+  email             String       @unique
+  passwordHash      String
+  role              String       // PARENT, HEALTH_WORKER, DOCTOR, ADMIN
+  fullName          String
+  phone             String?
+  preferredLanguage String       @default("en") // en, ta
+  isActive          Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  parentProfile         ParentProfile?
+  healthWorkerProfile   HealthWorkerProfile?
+  clinicianProfile      ClinicianProfile?
+  auditLogs             AuditLog[]
+  parentChangeRequests  ParentChangeRequest[] @relation("ParentUser")
+  reviewedChangeReqs    ParentChangeRequest[] @relation("ReviewerUser")
+}
+
+model ParentProfile {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address          String?
+  village          String?
+  block            String?
+  emergencyContact String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model HealthWorkerProfile {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workerCode     String   @unique
+  designation    String   // ASHA, ANM, VHN
+  assignedAreaId String?
+  assignedArea   AdministrativeArea? @relation(fields: [assignedAreaId], references: [id])
+  phone          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  assignedBeneficiaries Beneficiary[]
+  followUpTasks         FollowUpTask[]
+  referrals             Referral[]      @relation("ReferringWorker")
+}
+
+model ClinicianProfile {
+  id                     String   @id @default(uuid())
+  userId                 String   @unique
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dgoQualification       String   // e.g. "MBBS, DGO (Diploma in Gynaecology & Obstetrics)"
+  institution            String?
+  yearOfQualification    Int?
+  registrationNumber     String?  // e.g. "TNMC/DEMO/2016/4821"
+  isRegistrationVerified Boolean  @default(false)
+  facilityId             String?
+  facility               HealthFacility? @relation(fields: [facilityId], references: [id])
+  consultationHours      String?  // JSON string or readable format e.g. "09:00 - 13:00, 16:00 - 18:00"
+  breakTimings           String?  // JSON e.g. [{"start": "13:00", "end": "14:00"}]
+  biography              String?
+  languagesSpoken        String?  // "English, Tamil"
+  avatarUrl              String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  credentialVerifications CredentialVerification[]
+  appointments            Appointment[]
+  referredCases           Referral[]               @relation("ReferredDoctor")
+  clinicalReviews         ClinicalReview[]
+}
+
+model CredentialVerification {
+  id               String    @id @default(uuid())
+  clinicianId      String
+  clinician        ClinicianProfile @relation(fields: [clinicianId], references: [id], onDelete: Cascade)
+  verifiedByUserId String?
+  status           String    @default("PENDING") // PENDING, VERIFIED, REJECTED
+  documentUrl      String?
+  notes            String?
+  verifiedAt       DateTime?
+  createdAt        DateTime  @default(now())
+}
+
+model AdministrativeArea {
+  id           String   @id @default(uuid())
+  name         String
+  tamilName    String
+  type         String   // DISTRICT, BLOCK, VILLAGE_PANCHAYAT, SUB_CENTRE
+  parentAreaId String?
+  parentArea   AdministrativeArea? @relation("AreaHierarchy", fields: [parentAreaId], references: [id])
+  subAreas     AdministrativeArea[] @relation("AreaHierarchy")
+  sourceUrl    String?
+  isVerified   Boolean  @default(true)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  facilities   HealthFacility[]
+  workers      HealthWorkerProfile[]
+  beneficiaries Beneficiary[]
+}
+
+model HealthFacility {
+  id        String   @id @default(uuid())
+  name      String
+  tamilName String
+  type      String   // PHC, CHC, SUB_CENTRE, GH
+  areaId    String?
+  area      AdministrativeArea? @relation(fields: [areaId], references: [id])
+  address   String?
+  phone     String?
+  createdAt DateTime @default(now())
+
+  clinicians ClinicianProfile[]
+}
+
+model Beneficiary {
+  id               String    @id @default(uuid())
+  beneficiaryId    String    @unique // e.g. "TN-ERD-SAT-M001"
+  type             String    // MOTHER, CHILD
+  fullName         String
+  tamilName        String
+  dobOrLmp         DateTime
+  gender           String    // FEMALE, MALE, OTHER
+  bloodGroup       String?
+  aadharRef        String?   // masked e.g. "XXXX-XXXX-1234"
+  rchId            String?   // Reproductive and Child Health ID
+  address          String?
+  villageId        String?
+  village          AdministrativeArea? @relation(fields: [villageId], references: [id])
+  assignedWorkerId String?
+  assignedWorker   HealthWorkerProfile? @relation(fields: [assignedWorkerId], references: [id])
+  parentUserId     String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  pregnancies          Pregnancy[]
+  maternalServices     MaternalService[]
+  immunizationRecords  ChildImmunizationRecord[]
+  appointments         Appointment[]
+  followUpTasks        FollowUpTask[]
+  reminders            Reminder[]
+  parentChangeRequests ParentChangeRequest[]
+  referrals            Referral[]
+  
+  motherRelations      MotherChildRelationship[] @relation("MotherBeneficiary")
+  childRelations       MotherChildRelationship[] @relation("ChildBeneficiary")
+}
+
+model MotherChildRelationship {
+  id                  String   @id @default(uuid())
+  motherBeneficiaryId String
+  mother              Beneficiary @relation("MotherBeneficiary", fields: [motherBeneficiaryId], references: [id], onDelete: Cascade)
+  childBeneficiaryId  String
+  child               Beneficiary @relation("ChildBeneficiary", fields: [childBeneficiaryId], references: [id], onDelete: Cascade)
+  relationshipType    String   @default("BIOLOGICAL")
+  createdAt           DateTime @default(now())
+}
+
+model Pregnancy {
+  id                  String    @id @default(uuid())
+  motherBeneficiaryId String
+  mother              Beneficiary @relation(fields: [motherBeneficiaryId], references: [id], onDelete: Cascade)
+  lmpDate             DateTime
+  eddDate             DateTime
+  gravidity           Int       @default(1)
+  parity              Int       @default(0)
+  highRiskStatus      Boolean   @default(false)
+  riskNotes           String?
+  registrationDate    DateTime  @default(now())
+  status              String    @default("ACTIVE") // ACTIVE, DELIVERED, COMPLETED
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  maternalServices    MaternalService[]
+}
+
+model MaternalService {
+  id               String    @id @default(uuid())
+  pregnancyId      String
+  pregnancy        Pregnancy @relation(fields: [pregnancyId], references: [id], onDelete: Cascade)
+  beneficiaryId    String
+  beneficiary      Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  serviceType      String    // ANC_1, ANC_2, ANC_3, ANC_4, TT_TD_1, TT_TD_2, IFA_DISTRIBUTION, USG_SCAN, BLOOD_INVESTIGATION, DELIVERY, PNC_1, PNC_2, PNC_3
+  scheduledDate    DateTime
+  completedDate    DateTime?
+  status           String    @default("SCHEDULED") // SCHEDULED, COMPLETED, OVERDUE, UNVERIFIED, RESCHEDULED
+  facilityId       String?
+  administeredBy   String?
+  batchNumber      String?
+  notes            String?
+  verifiedByUserId String?
+  verifiedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Vaccine {
+  id              String   @id @default(uuid())
+  code            String   @unique // e.g. "BCG", "OPV_0", "HEPB_0", "PENTA_1", "ROTA_1", "FIPV_1", "PCV_1", "MR_1", "DPT_BOOSTER_1", "TD_10"
+  name            String
+  tamilName       String
+  doseNumber      Int      @default(1)
+  targetAgeWeeks  Int      // 0 for at birth, 6, 10, 14, 39 (9m), 72 (16-24m), 260 (5-6y)
+  minAgeWeeks     Int      @default(0)
+  maxAgeWeeks     Int?
+  route           String   // Intradermal, Oral, Intramuscular, Subcutaneous
+  site            String   // Left upper arm, Oral, Anterolateral thigh
+  diseaseTargeted String
+  scheduleVersion String   @default("NIS-TN-2024.1")
+  createdAt       DateTime @default(now())
+
+  records         ChildImmunizationRecord[]
+}
+
+model ChildImmunizationRecord {
+  id                 String      @id @default(uuid())
+  childBeneficiaryId String
+  child              Beneficiary @relation(fields: [childBeneficiaryId], references: [id], onDelete: Cascade)
+  vaccineId          String
+  vaccine            Vaccine     @relation(fields: [vaccineId], references: [id])
+  dueDate            DateTime
+  administeredDate   DateTime?
+  status             String      @default("SCHEDULED") // SCHEDULED, COMPLETED, OVERDUE, UNVERIFIED, RESCHEDULED
+  facilityId         String?
+  administeredBy     String?
+  batchLotNumber     String?
+  notes              String?
+  verifiedByUserId   String?
+  verifiedAt         DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+}
+
+model ImmunizationScheduleVersion {
+  id            String   @id @default(uuid())
+  versionNumber String   @unique // e.g. "NIS-TN-2024.1"
+  name          String
+  jurisdiction  String   // "Tamil Nadu & National Immunization Schedule"
+  effectiveDate DateTime
+  sourceUrl     String
+  reviewDate    DateTime
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+}
+
+model Appointment {
+  id               String    @id @default(uuid())
+  doctorId         String
+  doctor           ClinicianProfile @relation(fields: [doctorId], references: [id])
+  beneficiaryId    String
+  beneficiary      Beneficiary @relation(fields: [beneficiaryId], references: [id])
+  scheduledDate    DateTime
+  startTime        String    // "10:00"
+  endTime          String    // "10:30"
+  status           String    @default("SCHEDULED") // SCHEDULED, CHECKED_IN, IN_CONSULTATION, COMPLETED, RESCHEDULED, CANCELLED, NO_SHOW
+  consultationType String    @default("ANTENATAL_CHECKUP") // ANTENATAL_CHECKUP, POSTNATAL_REVIEW, HIGH_RISK_REFERRAL, IMMUNIZATION_CONSULT
+  notes            String?
+  createdByUserId  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model FollowUpTask {
+  id                       String    @id @default(uuid())
+  taskCode                 String    @unique // e.g. "TASK-2026-001"
+  beneficiaryId            String
+  beneficiary              Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  serviceType              String
+  relatedServiceId         String?
+  dueDate                  DateTime
+  assignedWorkerId         String?
+  assignedWorker           HealthWorkerProfile? @relation(fields: [assignedWorkerId], references: [id])
+  priority                 String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  missedVisitReason        String?   // Parent unavailable, Phone unreachable, Temporary migration, Transport barrier, etc.
+  contactAttemptsCount     Int       @default(0)
+  lastContactAttemptDate   DateTime?
+  nextAction               String?   // HOME_VISIT, PHONE_CALL, RESCHEDULE, REFERRAL, SUPERVISOR_ESCALATION
+  nextFollowUpDate         DateTime?
+  status                   String    @default("OPEN") // OPEN, IN_PROGRESS, REFERRED, RESOLVED, CLOSED
+  requiresClinicianApproval Boolean  @default(false)
+  reviewerUserId           String?
+  resolutionNotes          String?
+  closedAt                 DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  contactAttempts          ContactAttempt[]
+  referrals                Referral[]
+  supportingDocuments      SupportingDocument[]
+}
+
+model ContactAttempt {
+  id              String       @id @default(uuid())
+  followUpTaskId  String
+  followUpTask    FollowUpTask @relation(fields: [followUpTaskId], references: [id], onDelete: Cascade)
+  attemptDate     DateTime     @default(now())
+  method          String       // HOME_VISIT, PHONE_CALL, COMMUNITY_CENTRE
+  outcome         String       // REACHED_PROMISED, UNREACHABLE, WRONG_NUMBER, MIGRATED_TEMPORARY, REFUSED, OTHER
+  notes           String?
+  workerId        String?
+  createdAt       DateTime     @default(now())
+}
+
+model Referral {
+  id                 String       @id @default(uuid())
+  followUpTaskId     String?
+  followUpTask       FollowUpTask? @relation(fields: [followUpTaskId], references: [id])
+  beneficiaryId      String
+  beneficiary        Beneficiary  @relation(fields: [beneficiaryId], references: [id])
+  referringWorkerId  String?
+  referringWorker    HealthWorkerProfile? @relation("ReferringWorker", fields: [referringWorkerId], references: [id])
+  referredDoctorId   String
+  referredDoctor     ClinicianProfile @relation("ReferredDoctor", fields: [referredDoctorId], references: [id])
+  reason             String
+  priority           String       @default("MEDIUM") // NORMAL, URGENT, HIGH_RISK
+  status             String       @default("PENDING") // PENDING, ACCEPTED, REJECTED, COMPLETED
+  doctorNotes        String?
+  referralDate       DateTime     @default(now())
+  reviewedAt         DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  clinicalReviews     ClinicalReview[]
+  supportingDocuments SupportingDocument[]
+}
+
+model ClinicalReview {
+  id               String       @id @default(uuid())
+  referralId       String
+  referral         Referral     @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  followUpTaskId   String?
+  doctorId         String
+  doctor           ClinicianProfile @relation(fields: [doctorId], references: [id])
+  reviewDate       DateTime     @default(now())
+  status           String       @default("APPROVED") // APPROVED, REJECTED, PENDING_INFO
+  clinicalFindings String
+  followUpPlan     String?
+  nextReviewDate   DateTime?
+  createdAt        DateTime     @default(now())
+}
+
+model SupportingDocument {
+  id               String        @id @default(uuid())
+  followUpTaskId   String?
+  followUpTask     FollowUpTask? @relation(fields: [followUpTaskId], references: [id])
+  referralId       String?
+  referral         Referral?     @relation(fields: [referralId], references: [id])
+  clinicianId      String?
+  uploaderUserId   String
+  originalFilename String
+  storedFilename   String
+  fileType         String
+  fileSize         Int
+  reviewStatus     String        @default("PENDING") // PENDING, APPROVED, REJECTED
+  uploadedAt       DateTime      @default(now())
+}
+
+model Reminder {
+  id            String      @id @default(uuid())
+  beneficiaryId String
+  beneficiary   Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  serviceType   String
+  targetDueDate DateTime
+  reminderType  String      // ADVANCE_3_DAYS, DUE_TODAY, OVERDUE_7_DAYS
+  channel       String      @default("SMS") // SMS, WHATSAPP, IN_APP
+  status        String      @default("SIMULATED_SENT") // PENDING, SIMULATED_SENT, DELIVERED, FAILED
+  scheduledFor  DateTime
+  sentAt        DateTime?
+  contentEn     String
+  contentTa     String
+  createdAt     DateTime    @default(now())
+}
+
+model ParentChangeRequest {
+  id              String      @id @default(uuid())
+  parentUserId    String
+  parentUser      User        @relation("ParentUser", fields: [parentUserId], references: [id], onDelete: Cascade)
+  beneficiaryId   String
+  beneficiary     Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  requestType     String      // PHONE_NUMBER, ADDRESS, VILLAGE, EMERGENCY_CONTACT
+  oldValue        String
+  newValue        String
+  status          String      @default("PENDING") // PENDING, APPROVED, REJECTED
+  rejectionReason String?
+  reviewedByUserId String?
+  reviewedByUser  User?       @relation("ReviewerUser", fields: [reviewedByUserId], references: [id])
+  reviewedAt      DateTime?
+  createdAt       DateTime    @default(now())
+}
+
+model Article {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  titleEn     String
+  titleTa     String
+  category    String   // TICKER_ANNOUNCEMENT, HISTORICAL_MILESTONE, HEALTH_RESOURCE
+  summaryEn   String
+  summaryTa   String
+  contentEn   String
+  contentTa   String
+  sourceUrl   String
+  reviewDate  DateTime
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String   // LOGIN, SERVICE_VERIFIED, FOLLOWUP_UPDATED, REFERRAL_ACCEPTED, etc.
+  entityType String
+  entityId   String?
+  details    String?
+  ipAddress  String?
+  timestamp  DateTime @default(now())
+}

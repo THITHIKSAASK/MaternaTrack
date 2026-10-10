@@ -1,0 +1,15 @@
+{
+  "name": "maternatrack-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MaternaTrack — Intelligent Maternal and Child Health Tracking, Immunization Scheduling and Follow-up System",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "build": "npm run build --prefix server && npm run build --prefix client",
+    "seed": "npm run seed --prefix server",
+    "test": "npm run test --prefix server && npm run test --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
