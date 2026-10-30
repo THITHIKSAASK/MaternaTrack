@@ -31,32 +31,34 @@ const explicitOrigins = [
   CLIENT_URL,
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  'https://materna-track.vercel.app',
   'https://materna-track-73el.vercel.app',
 ].filter(Boolean);
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (e.g. mobile apps, curl, same-origin serverless rewrites)
-      if (!origin) return callback(null, true);
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. mobile apps, curl, same-origin serverless rewrites)
+    if (!origin) return callback(null, true);
 
-      // Allow localhost, custom client URL, or any Vercel preview/production deployment
-      if (
-        explicitOrigins.includes(origin) ||
-        origin.endsWith('.vercel.app') ||
-        origin.startsWith('http://localhost:') ||
-        origin.startsWith('http://127.0.0.1:')
-      ) {
-        return callback(null, true);
-      }
+    // Allow localhost, custom client URL, or any Vercel preview/production deployment
+    if (
+      explicitOrigins.includes(origin) ||
+      origin.endsWith('.vercel.app') ||
+      origin.startsWith('http://localhost:') ||
+      origin.startsWith('http://127.0.0.1:')
+    ) {
+      return callback(null, true);
+    }
 
-      return callback(null, false);
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-  })
-);
+    return callback(null, false);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
 app.use(cookieParser());

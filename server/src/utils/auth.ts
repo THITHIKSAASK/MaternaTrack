@@ -34,20 +34,22 @@ export function verifyToken(token: string): TokenPayload | null {
 }
 
 export function setAuthCookie(res: Response, token: string): void {
+  const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
   res.cookie('token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: '/',
   });
 }
 
 export function clearAuthCookie(res: Response): void {
+  const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
   res.cookie('token', '', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
     expires: new Date(0),
     path: '/',
   });

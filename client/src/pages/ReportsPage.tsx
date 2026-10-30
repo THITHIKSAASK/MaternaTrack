@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { apiFetch } from '../api/client.js';
+import { apiFetch, getCleanApiUrl } from '../api/client.js';
 import {
   BarChart,
   Bar,
@@ -33,7 +33,7 @@ export const ReportsPage: React.FC = () => {
   }, []);
 
   const handleExportCsv = () => {
-    window.location.href = 'http://localhost:5000/api/reports/export-csv';
+    window.location.href = getCleanApiUrl('/reports/export-csv');
   };
 
   const handlePrint = () => {

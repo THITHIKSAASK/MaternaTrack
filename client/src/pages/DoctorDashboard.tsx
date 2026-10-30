@@ -179,17 +179,12 @@ export const DoctorDashboard: React.FC = () => {
     const formData = new FormData();
     formData.append('document', uploadFile);
 
-    const token = localStorage.getItem('maternatrack_token');
     try {
-      const res = await fetch(`http://localhost:5000/api/referrals/${referralId}/upload-document`, {
+      const data = await apiFetch(`/referrals/${referralId}/upload-document`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
         body: formData,
       });
 
-      const data = await res.json();
       setUploadingDoc(false);
 
       if (data.success) {
