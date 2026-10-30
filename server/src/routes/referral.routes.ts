@@ -8,14 +8,23 @@ import fs from 'fs';
 
 const router = Router();
 
-// Configure safe file upload storage
-const uploadDir = path.resolve('uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// Configure safe file upload storage (handles Vercel serverless /tmp vs local disk)
+const uploadDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.resolve('uploads');
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (err) {
+  console.warn('[Uploads] Could not initialize directory:', err);
 }
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
+    try {
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+    } catch (e) {}
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
