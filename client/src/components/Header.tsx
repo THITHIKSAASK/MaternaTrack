@@ -127,9 +127,6 @@ export const Header: React.FC = () => {
               <span className="text-2xl font-bold tracking-tight text-slate-900 group-hover:text-pink-700 transition">
                 Materna<span className="text-pink-700">Track</span>
               </span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider bg-pink-100 text-pink-800 px-1.5 py-0.5 rounded border border-pink-200">
-                PROTOTYPE
-              </span>
             </div>
             <p className="text-xs text-slate-500 hidden sm:block">
               {t('app.tagline')}

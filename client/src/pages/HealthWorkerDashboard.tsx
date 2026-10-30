@@ -72,14 +72,41 @@ export const HealthWorkerDashboard: React.FC = () => {
   const [referralReason, setReferralReason] = useState('');
   const [referralPriority, setReferralPriority] = useState('HIGH_RISK');
 
+  // Patient Registration Modal states
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [regType, setRegType] = useState<'MOTHER' | 'CHILD'>('MOTHER');
+  const [regFullName, setRegFullName] = useState('');
+  const [regTamilName, setRegTamilName] = useState('');
+  const [regDobOrLmp, setRegDobOrLmp] = useState(new Date().toISOString().split('T')[0]);
+  const [regGender, setRegGender] = useState('FEMALE');
+  const [regBloodGroup, setRegBloodGroup] = useState('B+ve');
+  const [regAadhar, setRegAadhar] = useState('');
+  const [regRchId, setRegRchId] = useState('');
+  const [regAddress, setRegAddress] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regHighRisk, setRegHighRisk] = useState(false);
+  const [regRiskNotes, setRegRiskNotes] = useState('');
+  const [regGravidity, setRegGravidity] = useState(1);
+  const [regParity, setRegParity] = useState(0);
+  const [regSubmitting, setRegSubmitting] = useState(false);
+  const [regError, setRegError] = useState<string | null>(null);
+  const [lastSyncedTime, setLastSyncedTime] = useState<string>(new Date().toLocaleTimeString());
+
   const isTa = i18n.language === 'ta';
 
   useEffect(() => {
     loadWorkerData();
+
+    // Auto-refresh interval (every 8 seconds) so changes reflect live
+    const interval = setInterval(() => {
+      loadWorkerData(true);
+    }, 8000);
+
+    return () => clearInterval(interval);
   }, [searchQuery, typeFilter, villageFilter]);
 
-  async function loadWorkerData() {
-    setLoading(true);
+  async function loadWorkerData(silent = false) {
+    if (!silent) setLoading(true);
     try {
       const params = new URLSearchParams();
       if (searchQuery) params.set('search', searchQuery);
@@ -99,15 +126,75 @@ export const HealthWorkerDashboard: React.FC = () => {
       if (rRes.success && rRes.data) setReferrals(rRes.data);
       if (cRes.success && cRes.data) {
         setClinicians(cRes.data);
-        if (cRes.data.length > 0) setReferralDoctorId(cRes.data[0].id);
+        if (cRes.data.length > 0 && !referralDoctorId) setReferralDoctorId(cRes.data[0].id);
       }
       if (aRes.success && aRes.data) setAnalytics(aRes.data);
+      setLastSyncedTime(new Date().toLocaleTimeString());
     } catch (e) {
       console.error('Error loading worker dashboard:', e);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
+
+  const handleRegisterPatientSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError(null);
+    if (!regFullName.trim()) {
+      setRegError('Patient name is required.');
+      return;
+    }
+
+    setRegSubmitting(true);
+    try {
+      const res = await apiFetch<any>('/beneficiaries', {
+        method: 'POST',
+        body: JSON.stringify({
+          fullName: regFullName.trim(),
+          tamilName: (regTamilName && regTamilName.trim()) || regFullName.trim(),
+          type: regType,
+          dobOrLmp: regDobOrLmp,
+          gender: regType === 'MOTHER' ? 'FEMALE' : regGender,
+          bloodGroup: regBloodGroup,
+          aadharRef: regAadhar,
+          rchId: regRchId,
+          address: regAddress,
+          phone: regPhone,
+          highRiskStatus: regHighRisk,
+          riskNotes: regRiskNotes,
+          gravidity: regGravidity,
+          parity: regParity,
+        }),
+      });
+
+      setRegSubmitting(false);
+      if (res.success && res.data) {
+        alert(
+          `Success! New ${regType === 'MOTHER' ? 'Mother' : 'Child'} registered with ID: ${
+            res.data.beneficiaryId
+          }.\n\nThis patient is now synchronized and live on the Doctor Dashboard and System Administrator Workspace!`
+        );
+        setShowRegisterModal(false);
+        // Reset form
+        setRegFullName('');
+        setRegTamilName('');
+        setRegAadhar('');
+        setRegRchId('');
+        setRegAddress('');
+        setRegPhone('');
+        setRegHighRisk(false);
+        setRegRiskNotes('');
+        // Reload data
+        loadWorkerData();
+        setActiveTab('beneficiaries');
+      } else {
+        setRegError(res.error || 'Failed to register patient.');
+      }
+    } catch (err: any) {
+      setRegSubmitting(false);
+      setRegError('Network error while registering patient.');
+    }
+  };
 
   const handleRecordServiceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,11 +274,17 @@ export const HealthWorkerDashboard: React.FC = () => {
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Top Header Card */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="bg-white rounded-3xl p-5 sm:p-8 border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
           <div className="space-y-1">
-            <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-900 text-white">
-              <Users className="w-3.5 h-3.5 text-pink-400" />
-              <span>Health Worker Workspace (VHN / ASHA)</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-900 text-white">
+                <Users className="w-3.5 h-3.5 text-pink-400" />
+                <span>Health Worker Workspace (VHN / ASHA)</span>
+              </span>
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Live Multi-Role Sync Active</span>
+              </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
               {user?.fullName || 'Priya R, VHN'}
@@ -201,26 +294,44 @@ export const HealthWorkerDashboard: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+            <button
+              onClick={() => loadWorkerData()}
+              className="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition"
+              title="Sync now"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden sm:inline">Synced {lastSyncedTime}</span>
+            </button>
+
+            <button
+              onClick={() => setShowRegisterModal(true)}
+              className="px-4 py-2.5 rounded-xl bg-pink-700 hover:bg-pink-800 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
+            >
+              <UserPlus className="w-4 h-4 text-pink-200" />
+              <span>Register Patient</span>
+            </button>
+
             <button
               onClick={() => {
                 if (beneficiaries.length > 0) setServiceBeneficiaryId(beneficiaries[0].id);
                 setShowRecordServiceModal(true);
               }}
-              className="px-4 py-2.5 rounded-xl bg-pink-700 hover:bg-pink-800 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
+              className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
             >
               <Plus className="w-4 h-4" />
-              <span>{t('worker.recordServiceBtn')}</span>
+              <span>Record Service</span>
             </button>
+
             <button
               onClick={() => {
                 if (beneficiaries.length > 0) setReferralBeneficiaryId(beneficiaries[0].id);
                 setShowReferralModal(true);
               }}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
+              className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold flex items-center gap-1.5 transition shadow-xs"
             >
-              <Stethoscope className="w-4 h-4 text-pink-400" />
-              <span>{t('worker.createReferral')}</span>
+              <Stethoscope className="w-4 h-4 text-pink-700" />
+              <span>Referral</span>
             </button>
           </div>
         </div>
@@ -422,9 +533,16 @@ export const HealthWorkerDashboard: React.FC = () => {
                 </p>
               </div>
 
-              {/* Filters */}
+              {/* Filters & Register Action */}
               <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                <div className="relative flex-1 sm:w-64">
+                <button
+                  onClick={() => setShowRegisterModal(true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-pink-700 hover:bg-pink-800 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs transition"
+                >
+                  <UserPlus className="w-3.5 h-3.5 text-pink-200" />
+                  <span>Register Patient</span>
+                </button>
+                <div className="relative flex-1 sm:w-60">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                   <input
                     type="text"
@@ -994,6 +1112,263 @@ export const HealthWorkerDashboard: React.FC = () => {
                   className="px-5 py-2 rounded-xl bg-pink-700 hover:bg-pink-800 text-white font-semibold"
                 >
                   Submit Referral
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Patient Registration Modal */}
+      {showRegisterModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-3xl p-5 sm:p-7 max-w-xl w-full shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 my-auto max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center text-pink-700">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">
+                    Register New Patient
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Instantly syncs to Clinician (Doctor) and System Admin workspaces.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRegisterModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {regError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-700 shrink-0" />
+                <span>{regError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleRegisterPatientSubmit} className="space-y-4 text-xs">
+              {/* Patient Type Selector */}
+              <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-2xl">
+                <button
+                  type="button"
+                  onClick={() => setRegType('MOTHER')}
+                  className={`py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-2 transition ${
+                    regType === 'MOTHER'
+                      ? 'bg-pink-700 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Heart className="w-4 h-4" />
+                  <span>Pregnant Mother</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRegType('CHILD')}
+                  className={`py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-2 transition ${
+                    regType === 'CHILD'
+                      ? 'bg-pink-700 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Baby className="w-4 h-4" />
+                  <span>Newborn / Child</span>
+                </button>
+              </div>
+
+              {/* Names */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-700">Full Name (English) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={regFullName}
+                    onChange={(e) => setRegFullName(e.target.value)}
+                    placeholder="e.g. Meenakshi S"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 focus:bg-white focus:ring-2 focus:ring-pink-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-700">Tamil Name (தமிழ்)</label>
+                  <input
+                    type="text"
+                    value={regTamilName}
+                    onChange={(e) => setRegTamilName(e.target.value)}
+                    placeholder="e.g. மீனாட்சி சு"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 focus:bg-white focus:ring-2 focus:ring-pink-500"
+                  />
+                </div>
+              </div>
+
+              {/* Mother-specific: LMP & Obstetrics OR Child-specific: DOB & Gender */}
+              {regType === 'MOTHER' ? (
+                <div className="p-3.5 bg-pink-50/60 border border-pink-200/80 rounded-2xl space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <label className="font-semibold text-slate-700">LMP Date *</label>
+                      <input
+                        type="date"
+                        required
+                        value={regDobOrLmp}
+                        onChange={(e) => setRegDobOrLmp(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl p-2"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-semibold text-slate-700">Gravidity (G)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={10}
+                        value={regGravidity}
+                        onChange={(e) => setRegGravidity(Number(e.target.value))}
+                        className="w-full bg-white border border-slate-300 rounded-xl p-2"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-semibold text-slate-700">Parity (P)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={10}
+                        value={regParity}
+                        onChange={(e) => setRegParity(Number(e.target.value))}
+                        className="w-full bg-white border border-slate-300 rounded-xl p-2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="highRiskCheck"
+                      checked={regHighRisk}
+                      onChange={(e) => setRegHighRisk(e.target.checked)}
+                      className="w-4 h-4 rounded text-pink-700 focus:ring-pink-500"
+                    />
+                    <label htmlFor="highRiskCheck" className="font-semibold text-rose-800 text-xs cursor-pointer">
+                      Flag as High-Risk Pregnancy (Alerts Doctor immediately)
+                    </label>
+                  </div>
+
+                  {regHighRisk && (
+                    <div className="space-y-1">
+                      <label className="font-semibold text-slate-700">High-Risk Factors / Clinical Notes</label>
+                      <input
+                        type="text"
+                        value={regRiskNotes}
+                        onChange={(e) => setRegRiskNotes(e.target.value)}
+                        placeholder="e.g. Gestational hypertension, previous caesarean, Hb < 8 g/dL"
+                        className="w-full bg-white border border-rose-300 rounded-xl p-2 text-rose-950"
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-3.5 bg-blue-50/60 border border-blue-200/80 rounded-2xl space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="font-semibold text-slate-700">Date of Birth (DOB) *</label>
+                      <input
+                        type="date"
+                        required
+                        value={regDobOrLmp}
+                        onChange={(e) => setRegDobOrLmp(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl p-2"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-semibold text-slate-700">Gender</label>
+                      <select
+                        value={regGender}
+                        onChange={(e) => setRegGender(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl p-2"
+                      >
+                        <option value="FEMALE">Female</option>
+                        <option value="MALE">Male</option>
+                        <option value="OTHER">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Clinical & Identification details */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-700">Blood Group</label>
+                  <select
+                    value={regBloodGroup}
+                    onChange={(e) => setRegBloodGroup(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5"
+                  >
+                    <option value="O+ve">O+ve</option>
+                    <option value="O-ve">O-ve</option>
+                    <option value="A+ve">A+ve</option>
+                    <option value="A-ve">A-ve</option>
+                    <option value="B+ve">B+ve</option>
+                    <option value="B-ve">B-ve</option>
+                    <option value="AB+ve">AB+ve</option>
+                    <option value="AB-ve">AB-ve</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-700">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={regPhone}
+                    onChange={(e) => setRegPhone(e.target.value)}
+                    placeholder="e.g. 9842109812"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-700">RCH / MCTS ID</label>
+                  <input
+                    type="text"
+                    value={regRchId}
+                    onChange={(e) => setRegRchId(e.target.value)}
+                    placeholder="e.g. RCH-2026-891"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Address */}
+              <div className="space-y-1">
+                <label className="font-semibold text-slate-700">Street Address & Village Details</label>
+                <input
+                  type="text"
+                  value={regAddress}
+                  onChange={(e) => setRegAddress(e.target.value)}
+                  placeholder="e.g. 14 North Street, Ukkaram Village"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowRegisterModal(false)}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={regSubmitting}
+                  className="px-5 py-2.5 rounded-xl bg-pink-700 hover:bg-pink-800 disabled:opacity-50 text-white font-semibold transition shadow-sm flex items-center gap-1.5"
+                >
+                  <UserPlus className="w-4 h-4 text-pink-200" />
+                  <span>{regSubmitting ? 'Registering...' : 'Register & Sync to Doctor & Admin'}</span>
                 </button>
               </div>
             </form>
